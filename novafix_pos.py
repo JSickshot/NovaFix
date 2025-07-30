@@ -262,8 +262,6 @@ class NovaFixPOS(tk.Tk):
         conn.close()
         for row in rows:
             self.tree_inventario.insert("", tk.END, values=row)
-
-
     
 
 if __name__ == "__main__":
