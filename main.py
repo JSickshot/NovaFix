@@ -1,7 +1,11 @@
-from database import crear_tablas
+from database import init_db, verificar_esquema
+import tkinter as tk
 from gui.login import LoginWindow
 
 if __name__ == "__main__":
-    crear_tablas()
-    app = LoginWindow()
-    app.mainloop()
+    init_db()
+    verificar_esquema() 
+
+    root = tk.Tk()
+    app = LoginWindow(root)
+    root.mainloop()

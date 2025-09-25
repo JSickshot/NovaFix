@@ -1,37 +1,52 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 import sqlite3
 from database import DB
 from gui.main_window import MainWindow
 
-class LoginWindow(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Login - NovaFix")
-        self.geometry("340x210")
-        self.resizable(False, False)
+class LoginWindow(tk.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        self.master.title("NovaFix - Login")
 
-        ttk.Label(self, text="Usuario:").pack(pady=(14,4))
-        self.entry_user = ttk.Entry(self, width=26)
-        self.entry_user.pack()
+        # 🔹 Tamaño fijo de la ventana
+        w, h = 300, 180
+        # 🔹 Tamaño de pantalla
+        ws = self.master.winfo_screenwidth()
+        hs = self.master.winfo_screenheight()
+        # 🔹 Coordenadas para centrar
+        x = int((ws/2) - (w/2))
+        y = int((hs/2) - (h/2))
 
-        ttk.Label(self, text="Contraseña:").pack(pady=(10,4))
-        self.entry_pass = ttk.Entry(self, show="*", width=26)
-        self.entry_pass.pack()
+        # Ajustar ventana
+        self.master.geometry(f"{w}x{h}+{x}+{y}")
+        self.master.resizable(False, False)
 
-        ttk.Button(self, text="Ingresar", command=self.check_login).pack(pady=14)
+        # Formulario
+        tk.Label(master, text="Usuario:").pack(pady=5)
+        self.e_user = tk.Entry(master)
+        self.e_user.pack(pady=5)
+
+        tk.Label(master, text="Contraseña:").pack(pady=5)
+        self.e_pass = tk.Entry(master, show="*")
+        self.e_pass.pack(pady=5)
+
+        tk.Button(master, text="Ingresar", command=self.check_login).pack(pady=10)
 
     def check_login(self):
-        username = self.entry_user.get().strip()
-        password = self.entry_pass.get().strip()
+        user = self.e_user.get().strip()
+        pwd = self.e_pass.get().strip()
 
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("SELECT rol FROM usuarios WHERE username=? AND password=?", (username, password))
+        if not user or not pwd:
+            return messagebox.showerror("Error", "Ingresa usuario y contraseña")
+
+        conn = sqlite3.connect(DB); c = conn.cursor()
+        c.execute("SELECT rol FROM usuarios WHERE username=? AND password=?", (user, pwd))
         row = c.fetchone()
         conn.close()
 
         if row:
-            MainWindow(self, username, row[0])
+            MainWindow(self.master, user, row[0])  # abrir ventana principal
         else:
             messagebox.showerror("Error", "Usuario o contraseña incorrectos")
