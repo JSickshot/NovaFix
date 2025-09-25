@@ -8,18 +8,18 @@ class LoginWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Login - NovaFix")
-        self.geometry("300x200")
+        self.geometry("340x210")
         self.resizable(False, False)
 
-        ttk.Label(self, text="Usuario:").pack(pady=5)
-        self.entry_user = ttk.Entry(self)
+        ttk.Label(self, text="Usuario:").pack(pady=(14,4))
+        self.entry_user = ttk.Entry(self, width=26)
         self.entry_user.pack()
 
-        ttk.Label(self, text="Contraseña:").pack(pady=5)
-        self.entry_pass = ttk.Entry(self, show="*")
+        ttk.Label(self, text="Contraseña:").pack(pady=(10,4))
+        self.entry_pass = ttk.Entry(self, show="*", width=26)
         self.entry_pass.pack()
 
-        ttk.Button(self, text="Ingresar", command=self.check_login).pack(pady=10)
+        ttk.Button(self, text="Ingresar", command=self.check_login).pack(pady=14)
 
     def check_login(self):
         username = self.entry_user.get().strip()
@@ -32,7 +32,6 @@ class LoginWindow(tk.Tk):
         conn.close()
 
         if row:
-            # Abrir ventana principal usando Toplevel
             MainWindow(self, username, row[0])
         else:
             messagebox.showerror("Error", "Usuario o contraseña incorrectos")

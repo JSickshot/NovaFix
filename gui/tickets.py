@@ -1,174 +1,146 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
-import sqlite3
+from tkinter import ttk, messagebox
+import sqlite3, os
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-import os
+from reportlab.pdfgen import canvas as pdfcanvas
+from reportlab.lib import colors
+from database import DB
 
-DB = "novafix_pos.db"
+# variables globales para refrescar
+tree_tickets = None
+combo_cliente = None
 
-# --- Funciones generales ---
-def generar_folio():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT folio FROM tickets ORDER BY id DESC LIMIT 1")
-    row = c.fetchone()
-    conn.close()
-    if row:
-        last_folio = row[0]
-        num = int(last_folio.split('-')[1]) + 1
-    else:
-        num = 1
+def _get_clientes():
+    conn = sqlite3.connect(DB); c = conn.cursor()
+    c.execute("SELECT cliente_id, nombre FROM clientes ORDER BY nombre")
+    rows = c.fetchall(); conn.close()
+    return rows
+
+def _generar_folio():
+    conn = sqlite3.connect(DB); c = conn.cursor()
+    c.execute("SELECT folio FROM tickets ORDER BY ticket_id DESC LIMIT 1")
+    row = c.fetchone(); conn.close()
+    num = int(row[0].split('-')[1]) + 1 if row else 1
     return f"TCK-{num:04d}"
 
-def exportar_ticket_pdf(folio):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT * FROM tickets WHERE folio = ?", (folio,))
-    ticket = c.fetchone()
-    conn.close()
-
-    if not ticket:
-        messagebox.showerror("Error", "No se encontró el ticket.")
-        return
-
-    _, folio, cliente, telefono, equipo, falla, estado, fecha_ingreso, fecha_entrega = ticket
+def _exportar_ticket_pdf(folio, datos):
     pdf_file = f"{folio}.pdf"
-    c = canvas.Canvas(pdf_file, pagesize=letter)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, 750, "TICKET DE SERVICIO - NOVA FIX")
+    c = pdfcanvas.Canvas(pdf_file, pagesize=letter)
+
+    c.setFont("Helvetica-Bold", 18)
+    c.setFillColor(colors.HexColor("#2980B9"))
+    c.drawCentredString(300, 770, "NOVA FIX - TICKET DE REPARACIÓN")
+
+    c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
+    c.drawString(50, 740, f"Folio: {folio}")
+    c.drawString(350, 740, f"Fecha: {datos['fecha_ingreso']}")
 
-    c.drawString(50, 720, f"Folio: {folio}")
-    c.drawString(300, 720, f"Fecha Ingreso: {fecha_ingreso}")
-    c.drawString(50, 700, f"Cliente: {cliente}")
-    c.drawString(300, 700, f"Teléfono: {telefono}")
-    c.drawString(50, 680, f"Equipo: {equipo}")
-    c.drawString(50, 660, f"Falla reportada: {falla}")
-    c.drawString(50, 640, f"Estado: {estado}")
-    c.drawString(300, 640, f"Entrega estimada: {fecha_entrega}")
-    c.drawString(50, 580, "Firma cliente: _________________________________")
+    cli = datos["cliente"]
+    c.setFont("Helvetica-Bold", 12); c.drawString(50, 710, "Datos del Cliente:")
+    c.setFont("Helvetica", 11)
+    c.drawString(70, 695, f"Nombre: {cli['nombre']}")
+    c.drawString(70, 680, f"Teléfono: {cli['telefono'] or 'N/D'}")
+    c.drawString(70, 665, f"Email: {cli['email'] or 'N/D'}")
+    c.drawString(70, 650, f"Dirección: {cli['direccion'] or 'N/D'}")
+    c.drawString(70, 635, f"Ciudad: {cli['ciudad'] or 'N/D'}")
+    c.drawString(70, 620, f"CP: {cli['cp'] or 'N/D'}")
+
+    c.setFont("Helvetica-Bold", 12); c.drawString(50, 590, "Datos del Equipo:")
+    c.setFont("Helvetica", 11)
+    c.drawString(70, 575, f"Equipo: {datos['equipo']}")
+    c.drawString(70, 560, f"Diagnóstico: {datos['diagnostico']}")
+    c.drawString(70, 545, f"Estado: {datos['estado']}")
+
+    c.line(50, 440, 300, 440)
+    c.drawString(50, 425, "Firma cliente")
+
     c.save()
-    messagebox.showinfo("Éxito", f"Ticket exportado como {pdf_file}")
-    os.startfile(pdf_file)
+    try: os.startfile(pdf_file)
+    except: pass
+    messagebox.showinfo("PDF", f"Ticket exportado como {pdf_file}")
 
-# --- Tab de tickets ---
 def cargar_tab_tickets(frame):
-    # Formulario
-    form_frame = ttk.LabelFrame(frame, text="Registrar Ticket")
-    form_frame.pack(fill="x", padx=10, pady=10)
+    global tree_tickets, combo_cliente
 
-    tk.Label(form_frame, text="Cliente:").grid(row=0, column=0, sticky='w')
-    entry_cliente = tk.Entry(form_frame, width=30)
-    entry_cliente.grid(row=0, column=1, sticky='w')
+    form = ttk.LabelFrame(frame, text="Generar Ticket")
+    form.pack(fill="x", padx=10, pady=10)
 
-    tk.Label(form_frame, text="Teléfono:").grid(row=0, column=2, sticky='w')
-    entry_telefono = tk.Entry(form_frame, width=20)
-    entry_telefono.grid(row=0, column=3, sticky='w')
+    combo_cliente = ttk.Combobox(form, state="readonly", width=40)
+    tk.Label(form, text="Cliente:").grid(row=0, column=0)
+    combo_cliente.grid(row=0, column=1, columnspan=2, sticky="w")
 
-    tk.Label(form_frame, text="Equipo:").grid(row=1, column=0, sticky='w')
-    entry_equipo = tk.Entry(form_frame, width=30)
-    entry_equipo.grid(row=1, column=1, sticky='w')
+    def cargar_combo_clientes():
+        combo_cliente["values"] = [f"{cid} - {nom}" for cid, nom in _get_clientes()]
 
-    tk.Label(form_frame, text="Falla reportada:").grid(row=2, column=0, sticky='w')
-    entry_falla = tk.Entry(form_frame, width=50)
-    entry_falla.grid(row=2, column=1, columnspan=3, sticky='w')
+    cargar_combo_clientes()
 
-    tk.Label(form_frame, text="Estado:").grid(row=3, column=0, sticky='w')
-    combo_estado = ttk.Combobox(form_frame, values=["Pendiente", "En reparación", "Terminado", "Entregado"], state="readonly")
+    e_equipo = tk.Entry(form, width=40)
+    e_diag = tk.Entry(form, width=60)
+    combo_estado = ttk.Combobox(form, values=["Pendiente","En reparación","Terminado","Entregado"], state="readonly")
     combo_estado.current(0)
-    combo_estado.grid(row=3, column=1, sticky='w')
 
-    tk.Label(form_frame, text="Fecha entrega (dd/mm/aaaa):").grid(row=3, column=2, sticky='w')
-    entry_fecha_entrega = tk.Entry(form_frame, width=20)
-    entry_fecha_entrega.grid(row=3, column=3, sticky='w')
+    tk.Label(form, text="Equipo:").grid(row=1, column=0); e_equipo.grid(row=1, column=1)
+    tk.Label(form, text="Diagnóstico:").grid(row=2, column=0); e_diag.grid(row=2, column=1)
+    tk.Label(form, text="Estado:").grid(row=3, column=0); combo_estado.grid(row=3, column=1)
 
-    # Treeview
-    tree_tickets = ttk.Treeview(frame, columns=("folio", "cliente", "equipo", "estado", "fecha_ingreso", "fecha_entrega"), show='headings')
-    tree_tickets.heading("folio", text="Folio")
-    tree_tickets.heading("cliente", text="Cliente")
-    tree_tickets.heading("equipo", text="Equipo")
-    tree_tickets.heading("estado", text="Estado")
-    tree_tickets.heading("fecha_ingreso", text="Ingreso")
-    tree_tickets.heading("fecha_entrega", text="Entrega")
-    tree_tickets.pack(fill='both', expand=True, padx=10, pady=5)
+    tree_tickets = ttk.Treeview(frame, columns=("ticket_id","folio","cliente","equipo","estado","fecha_ingreso"), show="headings")
+    for c in ("ticket_id","folio","cliente","equipo","estado","fecha_ingreso"):
+        tree_tickets.heading(c, text=c.capitalize())
+    tree_tickets.pack(fill="both", expand=True, padx=10, pady=6)
 
-    # --- Funciones internas ---
     def cargar_tickets_tree():
-        for row in tree_tickets.get_children():
-            tree_tickets.delete(row)
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("SELECT folio, cliente, equipo, estado, fecha_ingreso, fecha_entrega FROM tickets ORDER BY id DESC")
-        rows = c.fetchall()
+        for r in tree_tickets.get_children(): tree_tickets.delete(r)
+        conn=sqlite3.connect(DB);c=conn.cursor()
+        c.execute("""SELECT t.ticket_id,t.folio,c.nombre,t.descripcion_equipo,t.estado,t.fecha_ingreso
+                     FROM tickets t LEFT JOIN clientes c ON t.cliente_id=c.cliente_id ORDER BY t.ticket_id DESC""")
+        for row in c.fetchall(): tree_tickets.insert("", tk.END, values=row)
         conn.close()
-        for row in rows:
-            tree_tickets.insert("", tk.END, values=row)
 
     def guardar_ticket():
-        cliente = entry_cliente.get().strip()
-        telefono = entry_telefono.get().strip()
-        equipo = entry_equipo.get().strip()
-        falla = entry_falla.get().strip()
-        estado = combo_estado.get()
-        fecha_entrega = entry_fecha_entrega.get().strip()
-
-        if not cliente or not equipo or not falla:
-            messagebox.showerror("Error", "Debe llenar Cliente, Equipo y Falla.")
-            return
-        if fecha_entrega:
-            try:
-                datetime.strptime(fecha_entrega, "%d/%m/%Y")
-            except ValueError:
-                messagebox.showerror("Error", "Formato de fecha inválido. Use dd/mm/aaaa.")
-                return
-
-        folio = generar_folio()
-        fecha_ingreso = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO tickets(folio, cliente, telefono, equipo, falla, estado, fecha_ingreso, fecha_entrega)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (folio, cliente, telefono, equipo, falla, estado, fecha_ingreso, fecha_entrega))
+        if not combo_cliente.get(): return messagebox.showerror("Error","Selecciona cliente")
+        cliente_id=int(combo_cliente.get().split(" - ")[0])
+        folio=_generar_folio();fecha=datetime.now().strftime("%Y-%m-%d %H:%M")
+        conn=sqlite3.connect(DB);c=conn.cursor()
+        c.execute("INSERT INTO tickets (folio,cliente_id,fecha_ingreso,descripcion_equipo,diagnostico,estado) VALUES (?,?,?,?,?,?)",
+                  (folio,cliente_id,fecha,e_equipo.get(),e_diag.get(),combo_estado.get()))
         conn.commit()
-        conn.close()
-        messagebox.showinfo("Éxito", f"Ticket guardado con folio {folio}")
-        cargar_tickets_tree()
-        exportar_ticket_pdf(folio)  # Guarda PDF automáticamente al crear
+        c.execute("SELECT nombre,telefono,email,direccion,ciudad,codigo_postal FROM clientes WHERE cliente_id=?",(cliente_id,))
+        row=c.fetchone();conn.close()
+        datos=dict(cliente=dict(nombre=row[0],telefono=row[1],email=row[2],direccion=row[3],ciudad=row[4],cp=row[5]),
+                   equipo=e_equipo.get(),diagnostico=e_diag.get(),estado=combo_estado.get(),fecha_ingreso=fecha)
+        _exportar_ticket_pdf(folio,datos)
+        cargar_tickets_tree();cargar_combo_clientes()
 
-    def cambiar_estado():
-        sel = tree_tickets.selection()
-        if not sel:
-            messagebox.showwarning("Atención", "Seleccione un ticket primero")
-            return
-        item = tree_tickets.item(sel[0])
-        folio = item["values"][0]
-        nuevo_estado = simpledialog.askstring("Cambiar Estado", "Nuevo estado (Pendiente, En reparación, Terminado, Entregado):")
-        if nuevo_estado not in ["Pendiente", "En reparación", "Terminado", "Entregado"]:
-            messagebox.showerror("Error", "Estado inválido")
-            return
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("UPDATE tickets SET estado=? WHERE folio=?", (nuevo_estado, folio))
-        conn.commit()
-        conn.close()
-        cargar_tickets_tree()
-        messagebox.showinfo("Éxito", f"Estado del ticket {folio} actualizado a {nuevo_estado}")
+    ttk.Button(form,text="Guardar Ticket + PDF",command=guardar_ticket).grid(row=3,column=2)
 
-    def exportar_seleccion():
-        sel = tree_tickets.selection()
-        if sel:
-            folio = tree_tickets.item(sel[0], "values")[0]
-            exportar_ticket_pdf(folio)
-        else:
-            messagebox.showwarning("Atención", "Seleccione un ticket primero")
-
-    # --- Botones ---
-    tk.Button(form_frame, text="Guardar Ticket y Exportar PDF", command=guardar_ticket).grid(row=4, column=0, pady=10)
-    tk.Button(frame, text="Cambiar Estado Ticket Seleccionado", command=cambiar_estado).pack(pady=5)
-    tk.Button(frame, text="Exportar Ticket Seleccionado a PDF", command=exportar_seleccion).pack(pady=5)
-
+    def editar_ticket(_evt=None):
+        sel=tree_tickets.selection()
+        if not sel:return
+        vals=tree_tickets.item(sel[0])["values"];tid=vals[0]
+        win=tk.Toplevel(frame);win.title("Editar Ticket")
+        e_equipo=tk.Entry(win);e_equipo.insert(0,vals[3]);e_equipo.grid(row=0,column=1);tk.Label(win,text="Equipo").grid(row=0,column=0)
+        e_estado=tk.Entry(win);e_estado.insert(0,vals[4]);e_estado.grid(row=1,column=1);tk.Label(win,text="Estado").grid(row=1,column=0)
+        def guardar():
+            conn=sqlite3.connect(DB);c=conn.cursor()
+            c.execute("UPDATE tickets SET descripcion_equipo=?,estado=? WHERE ticket_id=?",
+                      (e_equipo.get(),e_estado.get(),tid))
+            conn.commit();conn.close();cargar_tickets_tree();win.destroy()
+        tk.Button(win,text="Guardar",command=guardar).grid(row=2,column=0,columnspan=2)
+    tree_tickets.bind("<Double-1>",editar_ticket)
     cargar_tickets_tree()
+
+def refrescar_tickets():
+    try:
+        if tree_tickets: 
+            for r in tree_tickets.get_children(): tree_tickets.delete(r)
+            conn=sqlite3.connect(DB);c=conn.cursor()
+            c.execute("""SELECT t.ticket_id,t.folio,c.nombre,t.descripcion_equipo,t.estado,t.fecha_ingreso
+                         FROM tickets t LEFT JOIN clientes c ON t.cliente_id=c.cliente_id ORDER BY t.ticket_id DESC""")
+            for row in c.fetchall(): tree_tickets.insert("", tk.END, values=row)
+            conn.close()
+        if combo_cliente:
+            combo_cliente["values"] = [f"{cid} - {nom}" for cid, nom in _get_clientes()]
+    except Exception as e:
+        print("Error refrescando tickets:", e)

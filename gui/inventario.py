@@ -1,69 +1,73 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
-DB = "novafix_pos.db"
+from database import DB
 
 def cargar_tab_inventario(frame):
-    # Formulario
-    form_frame = ttk.LabelFrame(frame, text="Agregar / Editar Pieza")
-    form_frame.pack(fill="x", padx=10, pady=10)
+    global tree_inv, cargar_listado
 
-    tk.Label(form_frame, text="Pieza:").grid(row=0, column=0, sticky='w')
-    entry_pieza = tk.Entry(form_frame, width=30)
-    entry_pieza.grid(row=0, column=1, sticky='w')
+    form = ttk.LabelFrame(frame, text="Alta Inventario")
+    form.pack(fill="x", padx=10, pady=10)
 
-    tk.Label(form_frame, text="Descripción:").grid(row=1, column=0, sticky='w')
-    entry_descripcion = tk.Entry(form_frame, width=50)
-    entry_descripcion.grid(row=1, column=1, sticky='w')
+    e_pieza = tk.Entry(form, width=24)
+    e_desc = tk.Entry(form, width=48)
+    e_stock = tk.Entry(form, width=10)
+    e_precio = tk.Entry(form, width=10)
 
-    tk.Label(form_frame, text="Stock:").grid(row=2, column=0, sticky='w')
-    entry_stock = tk.Entry(form_frame, width=10)
-    entry_stock.grid(row=2, column=1, sticky='w')
+    tk.Label(form, text="Pieza:").grid(row=0, column=0); e_pieza.grid(row=0, column=1)
+    tk.Label(form, text="Descripción:").grid(row=1, column=0); e_desc.grid(row=1, column=1, columnspan=3)
+    tk.Label(form, text="Stock:").grid(row=2, column=0); e_stock.grid(row=2, column=1)
+    tk.Label(form, text="Precio:").grid(row=2, column=2); e_precio.grid(row=2, column=3)
 
-    def guardar_pieza():
-        pieza = entry_pieza.get().strip()
-        descripcion = entry_descripcion.get().strip()
-        stock = entry_stock.get().strip()
-        if not pieza or not stock:
-            messagebox.showerror("Error", "Debe llenar Pieza y Stock.")
-            return
+    def guardar():
         try:
-            stock_int = int(stock)
-        except ValueError:
-            messagebox.showerror("Error", "Stock debe ser un número entero.")
-            return
+            stock = int(e_stock.get()); precio = float(e_precio.get())
+        except: return messagebox.showerror("Error","Stock=entero, Precio=decimal")
+        conn=sqlite3.connect(DB);c=conn.cursor()
+        c.execute("INSERT OR REPLACE INTO inventario (pieza,descripcion,stock,precio_unitario) VALUES (?,?,?,?)",
+                  (e_pieza.get().strip(), e_desc.get().strip(), stock, precio))
+        conn.commit();conn.close();cargar_listado()
 
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("SELECT id FROM inventario WHERE pieza = ?", (pieza,))
-        row = c.fetchone()
-        if row:
-            c.execute("UPDATE inventario SET descripcion=?, stock=? WHERE id=?", (descripcion, stock_int, row[0]))
-        else:
-            c.execute("INSERT INTO inventario(pieza, descripcion, stock) VALUES (?, ?, ?)", (pieza, descripcion, stock_int))
-        conn.commit()
+    ttk.Button(form,text="Guardar Pieza",command=guardar).grid(row=3,column=0,pady=6)
+
+    cols=("pieza_id","pieza","descripcion","stock","precio_unitario")
+    tree_inv=ttk.Treeview(frame,columns=cols,show="headings")
+    for c in cols: tree_inv.heading(c,text=c.capitalize())
+    tree_inv.pack(fill="both",expand=True,padx=10,pady=5)
+
+    def cargar_listado():
+        for r in tree_inv.get_children(): tree_inv.delete(r)
+        conn=sqlite3.connect(DB);c=conn.cursor()
+        c.execute("SELECT pieza_id,pieza,descripcion,stock,precio_unitario FROM inventario ORDER BY pieza")
+        for row in c.fetchall(): tree_inv.insert("",tk.END,values=row)
         conn.close()
-        messagebox.showinfo("Éxito", f"Pieza '{pieza}' guardada.")
-        cargar_inventario_tree()
 
-    tk.Button(form_frame, text="Guardar Pieza", command=guardar_pieza).grid(row=3, column=0, pady=10)
+    def editar_inv(_evt=None):
+        sel=tree_inv.selection()
+        if not sel:return
+        vals=tree_inv.item(sel[0])["values"];pid=vals[0]
+        win=tk.Toplevel(frame);win.title("Editar Inventario")
+        labels=["Pieza","Descripción","Stock","Precio"]
+        entries={}
+        for i,(lbl,val) in enumerate(zip(labels,vals[1:])):
+            tk.Label(win,text=lbl).grid(row=i,column=0)
+            e=tk.Entry(win,width=40);e.insert(0,val);e.grid(row=i,column=1);entries[lbl.lower()]=e
+        def guardar():
+            conn=sqlite3.connect(DB);c=conn.cursor()
+            c.execute("UPDATE inventario SET pieza=?,descripcion=?,stock=?,precio_unitario=? WHERE pieza_id=?",
+                      (entries["pieza"].get(),entries["descripción"].get(),entries["stock"].get(),entries["precio"].get(),pid))
+            conn.commit();conn.close();cargar_listado();win.destroy()
+        tk.Button(win,text="Guardar",command=guardar).grid(row=4,column=0,columnspan=2,pady=10)
 
-    # Treeview
-    tree_inventario = ttk.Treeview(frame, columns=("pieza", "descripcion", "stock"), show='headings')
-    tree_inventario.heading("pieza", text="Pieza")
-    tree_inventario.heading("descripcion", text="Descripción")
-    tree_inventario.heading("stock", text="Stock")
-    tree_inventario.pack(fill='both', expand=True, padx=10, pady=5)
+    tree_inv.bind("<Double-1>",editar_inv)
+    cargar_listado()
 
-    def cargar_inventario_tree():
-        for row in tree_inventario.get_children():
-            tree_inventario.delete(row)
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("SELECT pieza, descripcion, stock FROM inventario ORDER BY pieza")
-        rows = c.fetchall()
+def refrescar_inventario():
+    try:
+        for r in tree_inv.get_children(): tree_inv.delete(r)
+        conn=sqlite3.connect(DB);c=conn.cursor()
+        c.execute("SELECT pieza_id,pieza,descripcion,stock,precio_unitario FROM inventario ORDER BY pieza")
+        for row in c.fetchall(): tree_inv.insert("",tk.END,values=row)
         conn.close()
-        for row in rows:
-            tree_inventario.insert("", tk.END, values=row)
-
-    cargar_inventario_tree()
+    except Exception as e:
+        print("Error refrescando inventario:", e)
