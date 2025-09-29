@@ -4,27 +4,50 @@ import sqlite3
 from datetime import datetime
 from database import DB
 
+tree_clientes = None
+
 def cargar_tab_clientes(frame):
-    global tree_clientes, cargar_listado
+    global tree_clientes
 
     form = ttk.LabelFrame(frame, text="Alta Cliente")
     form.pack(fill="x", padx=10, pady=10)
+    form.configure(style="Custom.TLabelframe")
 
-    e_nombre = tk.Entry(form, width=24)
-    e_apellido = tk.Entry(form, width=24)
-    e_tel = tk.Entry(form, width=20)
-    e_email = tk.Entry(form, width=28)
-    e_dir = tk.Entry(form, width=48)
-    e_ciudad = tk.Entry(form, width=24)
-    e_cp = tk.Entry(form, width=10)
+    style = ttk.Style()
+    style.configure("Custom.TLabelframe", background="black", foreground="#DAA621", font=("Segoe UI", 11, "bold"))
 
-    tk.Label(form, text="Nombre:").grid(row=0, column=0); e_nombre.grid(row=0, column=1)
-    tk.Label(form, text="Apellido:").grid(row=0, column=2); e_apellido.grid(row=0, column=3)
-    tk.Label(form, text="Teléfono:").grid(row=1, column=0); e_tel.grid(row=1, column=1)
-    tk.Label(form, text="Email:").grid(row=1, column=2); e_email.grid(row=1, column=3)
-    tk.Label(form, text="Dirección:").grid(row=2, column=0); e_dir.grid(row=2, column=1, columnspan=3, sticky="we")
-    tk.Label(form, text="Ciudad:").grid(row=3, column=0); e_ciudad.grid(row=3, column=1)
-    tk.Label(form, text="CP:").grid(row=3, column=2); e_cp.grid(row=3, column=3)
+    def styled_entry(parent, width=20):
+        return tk.Entry(parent, width=width, font=("Segoe UI", 11), bg="#222222", fg="white", insertbackground="white", relief="flat")
+
+    # Entradas con estilo
+    e_nombre = styled_entry(form, 24)
+    e_apellido = styled_entry(form, 24)
+    e_tel = styled_entry(form, 20)
+    e_email = styled_entry(form, 28)
+    e_dir = styled_entry(form, 48)
+    e_ciudad = styled_entry(form, 24)
+    e_cp = styled_entry(form, 10)
+
+    tk.Label(form, text="Nombre:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=0, column=0, sticky="w")
+    e_nombre.grid(row=0, column=1)
+
+    tk.Label(form, text="Apellido:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=0, column=2, sticky="w")
+    e_apellido.grid(row=0, column=3)
+
+    tk.Label(form, text="Teléfono:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=1, column=0, sticky="w")
+    e_tel.grid(row=1, column=1)
+
+    tk.Label(form, text="Email:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=1, column=2, sticky="w")
+    e_email.grid(row=1, column=3)
+
+    tk.Label(form, text="Dirección:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=2, column=0, sticky="w")
+    e_dir.grid(row=2, column=1, columnspan=3, sticky="we")
+
+    tk.Label(form, text="Ciudad:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=3, column=0, sticky="w")
+    e_ciudad.grid(row=3, column=1)
+
+    tk.Label(form, text="CP:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=3, column=2, sticky="w")
+    e_cp.grid(row=3, column=3)
 
     def guardar_cliente():
         if not e_nombre.get().strip():
@@ -38,8 +61,9 @@ def cargar_tab_clientes(frame):
         conn.commit(); conn.close()
         cargar_listado()
 
-    ttk.Button(form, text="Guardar Cliente", command=guardar_cliente).grid(row=4, column=0, pady=6)
+    ttk.Button(form, text="Guardar Cliente", style="Custom.TButton", command=guardar_cliente).grid(row=4, column=0, pady=6)
 
+    # --- Treeview ---
     cols = ("cliente_id","nombre","apellido","telefono","email","direccion","ciudad","cp")
     tree_clientes = ttk.Treeview(frame, columns=cols, show="headings")
     for c in cols: tree_clientes.heading(c, text=c.capitalize())
@@ -52,27 +76,6 @@ def cargar_tab_clientes(frame):
         for row in c.fetchall(): tree_clientes.insert("", tk.END, values=row)
         conn.close()
 
-    def editar_cliente(_evt=None):
-        sel = tree_clientes.selection()
-        if not sel: return
-        vals = tree_clientes.item(sel[0])["values"]
-        cliente_id = vals[0]
-        win = tk.Toplevel(frame); win.title("Editar Cliente")
-        labels = ["Nombre","Apellido","Teléfono","Email","Dirección","Ciudad","CP"]
-        entries = {}
-        for i,(lbl,val) in enumerate(zip(labels, vals[1:])):
-            tk.Label(win,text=lbl).grid(row=i,column=0)
-            e=tk.Entry(win,width=40); e.insert(0,val); e.grid(row=i,column=1); entries[lbl.lower()]=e
-        def guardar():
-            conn=sqlite3.connect(DB);c=conn.cursor()
-            c.execute("""UPDATE clientes SET nombre=?,apellido=?,telefono=?,email=?,direccion=?,ciudad=?,codigo_postal=? WHERE cliente_id=?""",
-                      (entries["nombre"].get(),entries["apellido"].get(),entries["teléfono"].get(),
-                       entries["email"].get(),entries["dirección"].get(),entries["ciudad"].get(),
-                       entries["cp"].get(),cliente_id))
-            conn.commit();conn.close();cargar_listado();win.destroy()
-        tk.Button(win,text="Guardar",command=guardar).grid(row=len(labels),column=0,columnspan=2,pady=10)
-
-    tree_clientes.bind("<Double-1>", editar_cliente)
     cargar_listado()
 
 def refrescar_clientes():
