@@ -7,10 +7,19 @@ from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.lib import colors
 from database import DB
 
-# variables globales
 tree_tickets = None
 combo_cliente = None
 
+# --- Helpers de estilo ---
+def styled_entry(parent, width=20):
+    return tk.Entry(parent, width=width, font=("Segoe UI", 11),
+                    bg="#222222", fg="white", insertbackground="white", relief="flat")
+
+def styled_label(parent, text):
+    return tk.Label(parent, text=text, font=("Segoe UI", 11, "bold"),
+                    bg="black", fg="#DAA621")
+
+# --- Funciones internas ---
 def _get_clientes():
     conn = sqlite3.connect(DB); c = conn.cursor()
     c.execute("SELECT cliente_id, nombre FROM clientes ORDER BY nombre")
@@ -30,10 +39,11 @@ def _exportar_ticket_pdf(folio, datos):
 
     # Título
     c.setFont("Helvetica-Bold", 18)
-    c.setFillColor(colors.black)
+    c.setFillColor(colors.HexColor("#BD181E"))  # rojo oficial
     c.drawCentredString(300, 770, "NOVA FIX - TICKET DE REPARACIÓN")
 
     # Encabezado
+    c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
     c.drawString(50, 740, f"Folio: {folio}")
     c.drawString(350, 740, f"Fecha: {datos['fecha_ingreso']}")
@@ -66,30 +76,31 @@ def _exportar_ticket_pdf(folio, datos):
     except: pass
     messagebox.showinfo("PDF", f"Ticket exportado como {pdf_file}")
 
+# --- UI principal ---
 def cargar_tab_tickets(frame):
     global tree_tickets, combo_cliente
 
-    form = ttk.LabelFrame(frame, text="Generar Ticket")
+    form = ttk.LabelFrame(frame, text="Generar Ticket", style="Custom.TLabelframe")
     form.pack(fill="x", padx=10, pady=10)
 
     combo_cliente = ttk.Combobox(form, state="readonly", width=40)
-    tk.Label(form, text="Cliente:").grid(row=0, column=0)
+    styled_label(form, "Cliente:").grid(row=0, column=0, sticky="w")
     combo_cliente.grid(row=0, column=1, columnspan=2, sticky="w")
 
     def cargar_combo_clientes():
         combo_cliente["values"] = [f"{cid} - {nom}" for cid, nom in _get_clientes()]
     cargar_combo_clientes()
 
-    e_equipo = tk.Entry(form, width=40)
-    e_diag = tk.Entry(form, width=60)
-    e_anticipo = tk.Entry(form, width=15)
+    e_equipo = styled_entry(form, 40)
+    e_diag = styled_entry(form, 60)
+    e_anticipo = styled_entry(form, 15)
     combo_estado = ttk.Combobox(form, values=["Pendiente","En reparación","Terminado","Entregado"], state="readonly")
     combo_estado.current(0)
 
-    tk.Label(form, text="Equipo:").grid(row=1, column=0); e_equipo.grid(row=1, column=1)
-    tk.Label(form, text="Diagnóstico:").grid(row=2, column=0); e_diag.grid(row=2, column=1)
-    tk.Label(form, text="Anticipo:").grid(row=3, column=0); e_anticipo.grid(row=3, column=1)
-    tk.Label(form, text="Estado:").grid(row=4, column=0); combo_estado.grid(row=4, column=1)
+    styled_label(form,"Equipo:").grid(row=1, column=0, sticky="w"); e_equipo.grid(row=1, column=1)
+    styled_label(form,"Diagnóstico:").grid(row=2, column=0, sticky="w"); e_diag.grid(row=2, column=1)
+    styled_label(form,"Anticipo:").grid(row=3, column=0, sticky="w"); e_anticipo.grid(row=3, column=1)
+    styled_label(form,"Estado:").grid(row=4, column=0, sticky="w"); combo_estado.grid(row=4, column=1)
 
     tree_tickets = ttk.Treeview(frame, columns=("ticket_id","folio","cliente","equipo","estado","fecha_ingreso","anticipo"), show="headings")
     for c in ("ticket_id","folio","cliente","equipo","estado","fecha_ingreso","anticipo"):
@@ -124,16 +135,24 @@ def cargar_tab_tickets(frame):
         _exportar_ticket_pdf(folio,datos)
         cargar_tickets_tree();cargar_combo_clientes()
 
-    ttk.Button(form,text="Guardar Ticket + PDF",command=guardar_ticket).grid(row=4,column=2)
+    ttk.Button(form,text="Guardar Ticket + PDF",style="Custom.TButton",command=guardar_ticket).grid(row=4,column=2)
 
     def editar_ticket(_evt=None):
         sel=tree_tickets.selection()
         if not sel:return
         vals=tree_tickets.item(sel[0])["values"];tid=vals[0]
-        win=tk.Toplevel(frame);win.title("Editar Ticket")
-        e_equipo=tk.Entry(win);e_equipo.insert(0,vals[3]);e_equipo.grid(row=0,column=1);tk.Label(win,text="Equipo").grid(row=0,column=0)
-        e_estado=tk.Entry(win);e_estado.insert(0,vals[4]);e_estado.grid(row=1,column=1);tk.Label(win,text="Estado").grid(row=1,column=0)
-        e_antic=tk.Entry(win);e_antic.insert(0,vals[6]);e_antic.grid(row=2,column=1);tk.Label(win,text="Anticipo").grid(row=2,column=0)
+        win=tk.Toplevel(frame);win.title("Editar Ticket");win.configure(bg="black")
+
+        e_equipo=styled_entry(win,30);e_equipo.insert(0,vals[3]);e_equipo.grid(row=0,column=1)
+        styled_label(win,"Equipo").grid(row=0,column=0,sticky="w")
+
+        e_estado=styled_entry(win,20);e_estado.insert(0,vals[4]);e_estado.grid(row=1,column=1)
+        styled_label(win,"Estado").grid(row=1,column=0,sticky="w")
+
+        e_antic=tk.Entry(win,font=("Segoe UI",11),bg="#222222",fg="white",insertbackground="white",relief="flat")
+        e_antic.insert(0,vals[6]);e_antic.grid(row=2,column=1)
+        styled_label(win,"Anticipo").grid(row=2,column=0,sticky="w")
+
         def guardar():
             try: nuevo=float(e_antic.get())
             except: return messagebox.showerror("Error","Anticipo debe ser numérico")
@@ -141,7 +160,8 @@ def cargar_tab_tickets(frame):
             c.execute("UPDATE tickets SET descripcion_equipo=?,estado=?,anticipo=? WHERE ticket_id=?",
                       (e_equipo.get(),e_estado.get(),nuevo,tid))
             conn.commit();conn.close();cargar_tickets_tree();win.destroy()
-        tk.Button(win,text="Guardar",command=guardar).grid(row=3,column=0,columnspan=2)
+        tk.Button(win,text="Guardar",bg="#BD181E",fg="white",activebackground="#DAA621",activeforeground="black",command=guardar).grid(row=3,column=0,columnspan=2,pady=10)
+
     tree_tickets.bind("<Double-1>",editar_ticket)
     cargar_tickets_tree()
 

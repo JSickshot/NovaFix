@@ -6,20 +6,20 @@ from database import DB
 
 tree_clientes = None
 
+def styled_entry(parent, width=20):
+    return tk.Entry(parent, width=width, font=("Segoe UI", 11),
+                    bg="#222222", fg="white", insertbackground="white", relief="flat")
+
+def styled_label(parent, text):
+    return tk.Label(parent, text=text, font=("Segoe UI", 11, "bold"),
+                    bg="black", fg="#DAA621")
+
 def cargar_tab_clientes(frame):
     global tree_clientes
 
-    form = ttk.LabelFrame(frame, text="Alta Cliente")
+    form = ttk.LabelFrame(frame, text="Alta Cliente", style="Custom.TLabelframe")
     form.pack(fill="x", padx=10, pady=10)
-    form.configure(style="Custom.TLabelframe")
 
-    style = ttk.Style()
-    style.configure("Custom.TLabelframe", background="black", foreground="#DAA621", font=("Segoe UI", 11, "bold"))
-
-    def styled_entry(parent, width=20):
-        return tk.Entry(parent, width=width, font=("Segoe UI", 11), bg="#222222", fg="white", insertbackground="white", relief="flat")
-
-    # Entradas con estilo
     e_nombre = styled_entry(form, 24)
     e_apellido = styled_entry(form, 24)
     e_tel = styled_entry(form, 20)
@@ -28,26 +28,13 @@ def cargar_tab_clientes(frame):
     e_ciudad = styled_entry(form, 24)
     e_cp = styled_entry(form, 10)
 
-    tk.Label(form, text="Nombre:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=0, column=0, sticky="w")
-    e_nombre.grid(row=0, column=1)
-
-    tk.Label(form, text="Apellido:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=0, column=2, sticky="w")
-    e_apellido.grid(row=0, column=3)
-
-    tk.Label(form, text="Teléfono:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=1, column=0, sticky="w")
-    e_tel.grid(row=1, column=1)
-
-    tk.Label(form, text="Email:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=1, column=2, sticky="w")
-    e_email.grid(row=1, column=3)
-
-    tk.Label(form, text="Dirección:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=2, column=0, sticky="w")
-    e_dir.grid(row=2, column=1, columnspan=3, sticky="we")
-
-    tk.Label(form, text="Ciudad:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=3, column=0, sticky="w")
-    e_ciudad.grid(row=3, column=1)
-
-    tk.Label(form, text="CP:", fg="#DAA621", bg="black", font=("Segoe UI", 11)).grid(row=3, column=2, sticky="w")
-    e_cp.grid(row=3, column=3)
+    styled_label(form, "Nombre:").grid(row=0, column=0, sticky="w"); e_nombre.grid(row=0, column=1)
+    styled_label(form, "Apellido:").grid(row=0, column=2, sticky="w"); e_apellido.grid(row=0, column=3)
+    styled_label(form, "Teléfono:").grid(row=1, column=0, sticky="w"); e_tel.grid(row=1, column=1)
+    styled_label(form, "Email:").grid(row=1, column=2, sticky="w"); e_email.grid(row=1, column=3)
+    styled_label(form, "Dirección:").grid(row=2, column=0, sticky="w"); e_dir.grid(row=2, column=1, columnspan=3, sticky="we")
+    styled_label(form, "Ciudad:").grid(row=3, column=0, sticky="w"); e_ciudad.grid(row=3, column=1)
+    styled_label(form, "CP:").grid(row=3, column=2, sticky="w"); e_cp.grid(row=3, column=3)
 
     def guardar_cliente():
         if not e_nombre.get().strip():

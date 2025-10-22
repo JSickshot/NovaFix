@@ -3,20 +3,30 @@ from tkinter import ttk, messagebox
 import sqlite3
 from database import DB
 
-def cargar_tab_usuarios(frame):
-    global tree_usr, cargar_listado
+tree_usr = None
 
-    form=ttk.LabelFrame(frame,text="Alta Usuario")
+def styled_entry(parent, width=20):
+    return tk.Entry(parent, width=width, font=("Segoe UI", 11),
+                    bg="#222222", fg="white", insertbackground="white", relief="flat")
+
+def styled_label(parent, text):
+    return tk.Label(parent, text=text, font=("Segoe UI", 11, "bold"),
+                    bg="black", fg="#DAA621")
+
+def cargar_tab_usuarios(frame):
+    global tree_usr
+
+    form=ttk.LabelFrame(frame,text="Alta Usuario",style="Custom.TLabelframe")
     form.pack(fill="x",padx=10,pady=10)
 
-    e_user=tk.Entry(form,width=20)
-    e_pass=tk.Entry(form,width=20,show="*")
+    e_user=styled_entry(form,20)
+    e_pass=styled_entry(form,20)
     cb_rol=ttk.Combobox(form,values=["sistemas","tecnico","ventas"],state="readonly")
     cb_rol.current(0)
 
-    tk.Label(form,text="Usuario:").grid(row=0,column=0);e_user.grid(row=0,column=1)
-    tk.Label(form,text="Contraseña:").grid(row=1,column=0);e_pass.grid(row=1,column=1)
-    tk.Label(form,text="Rol:").grid(row=2,column=0);cb_rol.grid(row=2,column=1)
+    styled_label(form,"Usuario:").grid(row=0,column=0,sticky="w");e_user.grid(row=0,column=1)
+    styled_label(form,"Contraseña:").grid(row=1,column=0,sticky="w");e_pass.grid(row=1,column=1)
+    styled_label(form,"Rol:").grid(row=2,column=0,sticky="w");cb_rol.grid(row=2,column=1)
 
     def guardar():
         conn=sqlite3.connect(DB);c=conn.cursor()
@@ -25,7 +35,8 @@ def cargar_tab_usuarios(frame):
             conn.commit();messagebox.showinfo("OK","Usuario creado");cargar_listado()
         except sqlite3.IntegrityError: messagebox.showerror("Error","Usuario ya existe")
         conn.close()
-    ttk.Button(form,text="Guardar",command=guardar).grid(row=3,column=0,pady=6)
+
+    ttk.Button(form,text="Guardar",style="Custom.TButton",command=guardar).grid(row=3,column=0,pady=6)
 
     tree_usr=ttk.Treeview(frame,columns=("id","username","rol"),show="headings")
     for c in ("id","username","rol"): tree_usr.heading(c,text=c.capitalize())
@@ -42,11 +53,17 @@ def cargar_tab_usuarios(frame):
         sel=tree_usr.selection()
         if not sel:return
         vals=tree_usr.item(sel[0])["values"];uid=vals[0]
-        win=tk.Toplevel(frame);win.title("Editar Usuario")
-        e_user=tk.Entry(win,width=20);e_user.insert(0,vals[1]);e_user.grid(row=0,column=1);tk.Label(win,text="Usuario").grid(row=0,column=0)
-        e_pass=tk.Entry(win,width=20);e_pass.grid(row=1,column=1);tk.Label(win,text="Contraseña").grid(row=1,column=0)
+        win=tk.Toplevel(frame);win.title("Editar Usuario");win.configure(bg="black")
+
+        styled_label(win,"Usuario").grid(row=0,column=0,sticky="w")
+        e_user=styled_entry(win,20);e_user.insert(0,vals[1]);e_user.grid(row=0,column=1)
+
+        styled_label(win,"Contraseña").grid(row=1,column=0,sticky="w")
+        e_pass=styled_entry(win,20);e_pass.grid(row=1,column=1)
+
+        styled_label(win,"Rol").grid(row=2,column=0,sticky="w")
         cb=tk.Combobox(win,values=["sistemas","tecnico","ventas"],state="readonly");cb.set(vals[2]);cb.grid(row=2,column=1)
-        tk.Label(win,text="Rol").grid(row=2,column=0)
+
         def guardar():
             conn=sqlite3.connect(DB);c=conn.cursor()
             if e_pass.get().strip():
@@ -54,7 +71,7 @@ def cargar_tab_usuarios(frame):
             else:
                 c.execute("UPDATE usuarios SET username=?,rol=? WHERE id=?",(e_user.get(),cb.get(),uid))
             conn.commit();conn.close();cargar_listado();win.destroy()
-        tk.Button(win,text="Guardar",command=guardar).grid(row=3,column=0,columnspan=2,pady=10)
+        tk.Button(win,text="Guardar",bg="#BD181E",fg="white",activebackground="#DAA621",activeforeground="black",command=guardar).grid(row=3,column=0,columnspan=2,pady=10)
 
     tree_usr.bind("<Double-1>",editar_usr)
     cargar_listado()

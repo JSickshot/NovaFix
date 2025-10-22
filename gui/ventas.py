@@ -12,6 +12,14 @@ tree_ventas = None
 cb_cliente = None
 cb_pieza = None
 
+def styled_entry(parent, width=20):
+    return tk.Entry(parent, width=width, font=("Segoe UI", 11),
+                    bg="#222222", fg="white", insertbackground="white", relief="flat")
+
+def styled_label(parent, text):
+    return tk.Label(parent, text=text, font=("Segoe UI", 11, "bold"),
+                    bg="black", fg="#DAA621")
+
 def _get_clientes():
     conn=sqlite3.connect(DB);c=conn.cursor()
     c.execute("SELECT cliente_id,nombre FROM clientes ORDER BY nombre")
@@ -25,18 +33,31 @@ def _get_piezas():
 def _exportar_comprobante(cliente,ventas,total):
     pdf_file=f"Venta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     c=canvas.Canvas(pdf_file,pagesize=letter)
-    c.setFont("Helvetica-Bold",18);c.setFillColor(colors.HexColor("#2980B9"))
+
+    # Logo
+    logo_path = os.path.join(os.path.dirname(__file__), "..", "assets", "Novafix.png")
+    if os.path.exists(logo_path):
+        c.drawImage(logo_path, 40, 730, width=60, height=60, mask="auto")
+
+    # Título
+    c.setFont("Helvetica-Bold",18)
+    c.setFillColor(colors.HexColor("#BD181E"))  # rojo NovaFix
     c.drawCentredString(300,770,"NOVA FIX - COMPROBANTE DE VENTA")
-    c.setFillColor(colors.black);c.setFont("Helvetica",12)
-    c.drawString(50,740,f"Cliente: {cliente['nombre']}");c.drawString(400,740,f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    c.setFillColor(colors.black)
+
+    c.setFont("Helvetica",12)
+    c.drawString(50,740,f"Cliente: {cliente['nombre']}")
+    c.drawString(400,740,f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     c.drawString(50,720,f"Dirección: {cliente['direccion'] or 'N/D'}")
     c.drawString(50,705,f"Ciudad: {cliente['ciudad'] or 'N/D'}   CP: {cliente['cp'] or 'N/D'}")
+
     y=680;c.setFont("Helvetica-Bold",11)
     c.drawString(50,y,"Pieza");c.drawString(250,y,"Cantidad");c.drawString(330,y,"Precio U.");c.drawString(420,y,"Importe")
     c.setFont("Helvetica",11)
     for pieza,cant,precio,importe in ventas:
         y-=20;c.drawString(50,y,pieza);c.drawString(250,y,str(cant));c.drawString(330,y,f"${precio:.2f}");c.drawString(420,y,f"${importe:.2f}")
     y-=30;c.setFont("Helvetica-Bold",12);c.drawString(330,y,"TOTAL:");c.drawString(420,y,f"${total:.2f}")
+
     c.save()
     try: os.startfile(pdf_file)
     except: pass
@@ -45,14 +66,15 @@ def _exportar_comprobante(cliente,ventas,total):
 def cargar_tab_ventas(frame):
     global tree_ventas, cb_cliente, cb_pieza
 
-    form=ttk.LabelFrame(frame,text="Registrar Venta");form.pack(fill="x",padx=10,pady=10)
+    form=ttk.LabelFrame(frame,text="Registrar Venta",style="Custom.TLabelframe")
+    form.pack(fill="x",padx=10,pady=10)
     cb_cliente=ttk.Combobox(form,state="readonly",width=30)
     cb_pieza=ttk.Combobox(form,state="readonly",width=30)
-    e_cant=tk.Entry(form,width=8)
+    e_cant=styled_entry(form,8)
 
-    tk.Label(form,text="Cliente:").grid(row=0,column=0);cb_cliente.grid(row=0,column=1)
-    tk.Label(form,text="Pieza:").grid(row=1,column=0);cb_pieza.grid(row=1,column=1)
-    tk.Label(form,text="Cantidad:").grid(row=1,column=2);e_cant.grid(row=1,column=3)
+    styled_label(form,"Cliente:").grid(row=0,column=0);cb_cliente.grid(row=0,column=1)
+    styled_label(form,"Pieza:").grid(row=1,column=0);cb_pieza.grid(row=1,column=1)
+    styled_label(form,"Cantidad:").grid(row=1,column=2);e_cant.grid(row=1,column=3)
 
     def cargar_combos():
         cb_cliente["values"]=[f"{cid}:{nom}" for cid,nom in _get_clientes()]
@@ -94,7 +116,8 @@ def cargar_tab_ventas(frame):
         _exportar_comprobante(cliente,detalle,total)
         ventas_actual.clear();tree_ventas.delete(*tree_ventas.get_children());cargar_combos();cargar_tabla();refrescar_inventario()
 
-    ttk.Button(form,text="Agregar",command=agregar).grid(row=1,column=4);ttk.Button(form,text="Finalizar",command=finalizar).grid(row=1,column=5)
+    ttk.Button(form,text="Agregar",style="Custom.TButton",command=agregar).grid(row=1,column=4)
+    ttk.Button(form,text="Finalizar",style="Custom.TButton",command=finalizar).grid(row=1,column=5)
 
     def cargar_tabla():
         tree_ventas.delete(*tree_ventas.get_children())
@@ -110,13 +133,14 @@ def cargar_tab_ventas(frame):
         sel=tree_ventas.selection()
         if not sel:return
         vals=tree_ventas.item(sel[0])["values"];vid=vals[0]
-        win=tk.Toplevel(frame);win.title("Editar Venta")
-        e_cant=tk.Entry(win);e_cant.insert(0,vals[3]);e_cant.grid(row=0,column=1);tk.Label(win,text="Cantidad").grid(row=0,column=0)
+        win=tk.Toplevel(frame);win.title("Editar Venta");win.configure(bg="black")
+        styled_label(win,"Cantidad").grid(row=0,column=0,sticky="w")
+        e_cant=styled_entry(win,10);e_cant.insert(0,vals[3]);e_cant.grid(row=0,column=1)
         def guardar():
             nueva=int(e_cant.get());conn=sqlite3.connect(DB);c=conn.cursor()
             c.execute("UPDATE ventas SET cantidad=? WHERE venta_id=?",(nueva,vid))
             conn.commit();conn.close();cargar_tabla();refrescar_inventario();win.destroy()
-        tk.Button(win,text="Guardar",command=guardar).grid(row=1,column=0,columnspan=2)
+        tk.Button(win,text="Guardar",bg="#BD181E",fg="white",activebackground="#DAA621",activeforeground="black",command=guardar).grid(row=1,column=0,columnspan=2)
     tree_ventas.bind("<Double-1>",editar_venta)
     cargar_tabla()
 
